@@ -112,6 +112,11 @@ class LoraModel(BaseTuner):
     def __init__(self, model, config, adapter_name) -> None:
         super().__init__(model, config, adapter_name)
 
+    def set_task_embedding(self, adapter_name, emb=None):
+        for m in self.model.modules():
+            if isinstance(m, LoraLayer):
+                m.set_task_embedding(adapter_name, emb)
+
     def _check_new_adapter_config(self, config: LoraConfig) -> None:
         """
         A helper method to check the config when a new adapter is being added.

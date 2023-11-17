@@ -25,6 +25,8 @@ from transformers.pytorch_utils import Conv1D
 from peft.tuners.tuners_utils import BaseTunerLayer
 from peft.utils.other import transpose
 
+def reshape_multiply(a, b):
+    return torch.mul(a, b.view(tuple([b.shape[0]] + [1]*(len(a.shape)-2) + [b.shape[1]])))
 
 class LoraLayer(BaseTunerLayer):
     # All names of layers that may contain (trainable) adapter weights
@@ -46,6 +48,7 @@ class LoraLayer(BaseTunerLayer):
         # Mark the weight as unmerged
         self._disable_adapters = False
         self.merged_adapters = []
+        self.task_embeddings = {}
 
         base_layer = self.get_base_layer()
         if isinstance(base_layer, nn.Linear):
@@ -66,6 +69,9 @@ class LoraLayer(BaseTunerLayer):
 
         self.in_features = in_features
         self.out_features = out_features
+
+    def set_task_embedding(self, adapter_name, emb=None):
+        self.task_embeddings[adapter_name] = emb
 
     def update_layer(self, adapter_name, r, lora_alpha, lora_dropout, init_lora_weights):
         if r <= 0:
@@ -324,7 +330,11 @@ class Linear(nn.Module, LoraLayer):
                 dropout = self.lora_dropout[active_adapter]
                 scaling = self.scaling[active_adapter]
                 x = x.to(lora_A.weight.dtype)
-                result += lora_B(lora_A(dropout(x))) * scaling
+                emb = self.task_embeddings.get(active_adapter, None)
+                if emb is not None:
+                    result += lora_B(reshape_multiply(lora_A(dropout(x)), emb)) * scaling
+                else:
+                    result += lora_B(lora_A(dropout(x))) * scaling
 
         result = result.to(previous_dtype)
         return result
@@ -465,7 +475,11 @@ class Embedding(nn.Module, LoraLayer):
                 embedding_B = self.lora_embedding_B[active_adapter].T
                 scaling = self.scaling[active_adapter]
                 after_A = self._embed(x, embedding_A)
-                result += (after_A @ embedding_B) * scaling
+                emb = self.task_embeddings.get(active_adapter, None)
+                if emb is not None:
+                    result += (reshape_multiply(after_A, emb) @ embedding_B) * scaling
+                else:
+                    result += (after_A @ embedding_B) * scaling
 
         return result
 
@@ -608,7 +622,11 @@ class Conv2d(nn.Module, LoraLayer):
                 dropout = self.lora_dropout[active_adapter]
                 scaling = self.scaling[active_adapter]
                 x = x.to(lora_A.weight.dtype)
-                result += lora_B(lora_A(dropout(x))) * scaling
+                emb = self.task_embeddings.get(active_adapter, None)
+                if emb is not None:
+                    result += lora_B(reshape_multiply(lora_A(dropout(x)), emb)) * scaling
+                else:
+                    result += lora_B(lora_A(dropout(x))) * scaling
 
         result = result.to(previous_dtype)
         return result
