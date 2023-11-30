@@ -267,23 +267,23 @@ class LoraModel(BaseTuner):
             eightbit_kwargs = kwargs.copy()
             eightbit_kwargs.update(
                 {
-                    "has_fp16_weights": target.state.has_fp16_weights,
-                    "memory_efficient_backward": target.state.memory_efficient_backward,
-                    "threshold": target.state.threshold,
-                    "index": target.index,
+                    "has_fp16_weights": target_base_layer.state.has_fp16_weights,
+                    "memory_efficient_backward": target_base_layer.state.memory_efficient_backward,
+                    "threshold": target_base_layer.state.threshold,
+                    "index": target_base_layer.index,
                 }
             )
-            new_module = Linear8bitLt(target, adapter_name, **eightbit_kwargs)
+            new_module = Linear8bitLt(target_base_layer, adapter_name, **eightbit_kwargs)
         elif loaded_in_4bit and is_bnb_4bit_available() and isinstance(target_base_layer, bnb.nn.Linear4bit):
             fourbit_kwargs = kwargs.copy()
             fourbit_kwargs.update(
                 {
-                    "compute_dtype": target.compute_dtype,
-                    "compress_statistics": target.weight.compress_statistics,
-                    "quant_type": target.weight.quant_type,
+                    "compute_dtype": target_base_layer.compute_dtype,
+                    "compress_statistics": target_base_layer.weight.compress_statistics,
+                    "quant_type": target_base_layer.weight.quant_type,
                 }
             )
-            new_module = Linear4bit(target, adapter_name, **fourbit_kwargs)
+            new_module = Linear4bit(target_base_layer, adapter_name, **fourbit_kwargs)
         elif AutoGPTQQuantLinear is not None and isinstance(target_base_layer, AutoGPTQQuantLinear):
             new_module = QuantLinear(target, adapter_name, **kwargs)
             target.weight = target.qweight
